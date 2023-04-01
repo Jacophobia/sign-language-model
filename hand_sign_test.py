@@ -9,10 +9,35 @@ mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
 
+class SlidingWindow:
+    def __init__(self, size):
+        self.queue = [0 for _ in range(size)]
+        self.size = size
+        self.end = 0
+        self.start = 0
+
+    def add(self, item):
+        self.queue[self.end] = item
+        self.end = (self.end + 1) % self.size
+        if self.end == self.start:
+            self.start = (self.start + 1) % self.size
+
+    def mode(self):
+        count = {}
+        for item in self.queue:
+            if item in count:
+                count[item] += 1
+            else:
+                count[item] = 1
+        return max(count, key=count.get)
+
+
+
 class HandTracker:
     def __init__(self, show_image=True):
         self.show_image = show_image
         self.model = pickle.load(open("sign_language_model.sav", "rb"))
+        self.sliding_window = SlidingWindow(25)
 
     def get_letter(self, num) -> str:
         num_to_letter = {
@@ -42,7 +67,11 @@ class HandTracker:
             23: 'Y'
         }
         return num_to_letter[round(num)]
-
+    
+    def get_guess(self, num) -> str:
+        letter = self.get_letter(num)
+        self.sliding_window.add(letter)
+        return self.sliding_window.mode()
 
     def get_prediction(self, row) -> str:
         if len(row) != 63:
@@ -56,7 +85,7 @@ class HandTracker:
         # add the distances to the normalized dataframe
         predictions = self.model.predict(distances.reshape(1, -1))
         if len(predictions) > 0:
-            return self.get_letter(predictions[0])
+            return self.get_guess(predictions[0])
         else:
             return "?"
 
